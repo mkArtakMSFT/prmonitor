@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>My page title</title>
+    <link rel="stylesheet" href="css/main.css">
+  </head>
+  <body>
+  <div>
+##BODY##
+  <div id="footer">
+  <p>
+    The report was generated on ##DATE## and includes all open pull requests which are not in Draft mode and have not been touched in the past 30 days. The leads with most open pull requests are at the top. Detailed statistics about all pull requests can be found at <a href="https://aka.ms/dotnetruntimepulls">https://aka.ms/dotnetruntimepulls</a>.
+  </p>
+  </div>
+  </div>
+  </body>
+</html>
