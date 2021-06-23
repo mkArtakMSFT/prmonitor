@@ -80,7 +80,7 @@ namespace prmonitor {
 			}
 
 			// Is the latest PR comment date newer
-			var comments = client.Issue.Comment.GetAllForIssue (org, repo, pr.Number).Result;
+			var comments = client.Issue.Comment.GetAllForIssue (org, repo, pr.Number).Result.Where (l => IsRelevantComment (l));
 			if (comments.Any (l => l.CreatedAt > activityDate)) {
 				lastActivity = DateTime.MaxValue;
 				return true;
@@ -91,6 +91,17 @@ namespace prmonitor {
 				lastActivity = last_commit_date;
 
 			return false;
+
+			static bool IsRelevantComment (IssueComment comment)
+			{
+				var msg = comment.Body;
+
+				if (msg.Contains ("PTAL") || msg.Contains ("CLA assistant ") || msg.Contains ("new-api-needs-documentation") ||
+					msg.StartsWith ("@") || msg.StartsWith ("Tagging ") || msg.StartsWith ("cc") || msg.StartsWith ("ping "))
+					return false;
+
+				return true;
+			}
 		}
 
 		static void ReportInactivePRs (List<(PullRequest, DateTime)> pullRequests, StringWriter sw)
@@ -168,7 +179,7 @@ namespace prmonitor {
 			return area;
 		}
 
-		static Dictionary<string, string> leadsCache = new Dictionary<string, string> ();
+		static Dictionary<string, string> leadsCache = new Dictionary<string, string> (StringComparer.OrdinalIgnoreCase);
 		static Dictionary<string, string> leadsNames = new Dictionary<string, string> () {
 			{ "@agocke", "Andy Gocke" },
 			{ "@SamMonoRT", "Sam Patel" },
@@ -182,7 +193,9 @@ namespace prmonitor {
 			{ "@tommcdon", "Tom McDonald" },
 			{ "@mangod9", "Manish Godse" },
 			{ "@dleeapho", "Dan Leeaphon" },
-			{ "@HongGit", "Hong Li" }
+			{ "@HongGit", "Hong Li" },
+			{ "@marek-safar", "Marek Safar" },
+			{ "@kevinpi", "Kevin Pilch"}
 		};
 
 		static async Task PopulateLeadsArea ()
