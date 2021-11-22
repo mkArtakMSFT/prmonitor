@@ -21,7 +21,8 @@ namespace prmonitor {
 			client.Credentials = CreateCredentials ();
 
 			var request = new PullRequestRequest () {
-				State = ItemStateFilter.Open
+				State = ItemStateFilter.Open,
+				Base = "main"
 			};
 
 			var prs = client.PullRequest.GetAllForRepository (org, repo, request).Result;
@@ -50,7 +51,7 @@ namespace prmonitor {
 			}
 
 			StringWriter sw = new StringWriter ();
-			ReportInactivePRs (inactive, sw);
+			ReportInactivePRs (inactive, sw, client);
 
 			var res = typeof (Program).Assembly.GetManifestResourceStream ("prmonitor.output.html.template");
 
@@ -104,30 +105,41 @@ namespace prmonitor {
 			}
 		}
 
-		static void ReportInactivePRs (List<(PullRequest, DateTime)> pullRequests, StringWriter sw)
+		static void ReportInactivePRs (List<(PullRequest, DateTime)> pullRequests, StringWriter sw, GitHubClient client)
 		{
-			Dictionary<PullRequest, string?> pr_areas = new Dictionary<PullRequest, string?> ();
+			Dictionary<PullRequest, string?> pr_scope = new Dictionary<PullRequest, string?> ();
 			foreach (var item in pullRequests) {
 				var pr = item.Item1;
-				pr_areas.Add (pr, GetArea (pr));
+				pr_scope.Add (pr, GetScope (pr));
 			}
 
-			Dictionary<PullRequest, string?> pr_leads = new Dictionary<PullRequest, string?> ();
+			Dictionary<PullRequest, string?> pr_owner = new Dictionary<PullRequest, string?> ();
 			foreach (var item in pullRequests) {
 				var pr = item.Item1;
-				var area = pr_areas[pr];
-				if (area is null)
+				var scope = pr_scope[pr];
+				if (scope is null)
 					continue;
 
-				pr_leads.Add (pr, GetAreaLead (area));
+				/*
+				// Prefer Assignee over area lead
+				var assignee = pr.Assignees.FirstOrDefault ()?.Login;
+				if (assignee is not null) {
+					var mun = GetMicrosoftUserName (assignee, client);
+					if (mun is not null) {
+						pr_owner.Add (pr, mun);
+						continue;
+					}
+				}
+				*/
+				pr_owner.Add (pr, GetScopeLead (scope));
 			}
 
 			//
 			// Group by Area, then by largest count in the area, then date
 			//
 			var grouping = pullRequests.
-				Where (l => pr_leads.ContainsKey (l.Item1)).
-				GroupBy (l => pr_leads[l.Item1]).
+				Where (l => pr_owner.ContainsKey (l.Item1)).
+				GroupBy (l => pr_owner[l.Item1]).
 				Select (l => new {
 					Lead = l.Key,
 					Items = l.OrderBy (ll => ll.Item2).ToList ()
@@ -139,15 +151,15 @@ namespace prmonitor {
 				sw.WriteLine ($"<p>{WebUtility.HtmlEncode (group.Lead)}</p>");
 
 				sw.WriteLine ("<table>");
-				sw.WriteLine ("<thead><tr><th>Pull Request</th><th>Assignee</th><th>Area</th><th>Inactive Days</th></thead>");
+				sw.WriteLine ("<thead><tr><th>Pull Request</th><th>Assignee</th><th>Scope</th><th>Stale Days</th></thead>");
 				sw.WriteLine ("<tbody>");
 
 				foreach (var item in group.Items) {
 					var pr = item.Item1;
 					sw.WriteLine ("<tr>");
 					sw.WriteLine ($"<td class=\"c1\"><a href=\"{ pr.HtmlUrl }\">{WebUtility.HtmlEncode (pr.Title.Trim ())}</a></td>");
-					sw.WriteLine ($"<td class=\"c2\">{ WebUtility.HtmlEncode (pr.Assignees.FirstOrDefault ()?.Login)}</td>");
-					sw.WriteLine ($"<td class=\"c3\">{ WebUtility.HtmlEncode (pr_areas[pr]?[5..])}</td>");
+					sw.WriteLine ($"<td class=\"c2\">{ WebUtility.HtmlEncode (GetMicrosoftUserName (pr.Assignees.FirstOrDefault ()?.Login, client))}</td>");
+					sw.WriteLine ($"<td class=\"c3\">{ WebUtility.HtmlEncode (pr_scope[pr]?[5..])}</td>");
 					sw.WriteLine ($"<td class=\"c4\">{ (DateTime.Today - item.Item2).TotalDays}</td>");
 					sw.WriteLine ("</tr>");
 				}
@@ -157,26 +169,32 @@ namespace prmonitor {
 			}
 		}
 
-		static string? GetArea (PullRequest pullRequest)
+		static string? GetScope (PullRequest pullRequest)
 		{
-			string? area = null;
-			foreach (var l in pullRequest.Labels) {
-				if (!l.Name.StartsWith ("area-", StringComparison.InvariantCultureIgnoreCase))
-					continue;
+			string? scope = FindLabel ("arch") ?? FindLabel ("os") ?? FindLabel ("area");
+			if (scope is null) {
+				Console.WriteLine ($"PR {pullRequest.HtmlUrl} is missing scope label");
+			}
 
-				if (area != null) {
-					Console.WriteLine ($"PR {pullRequest.HtmlUrl} has multiple area labels");
-					continue;
+			return scope;
+
+			string? FindLabel (string prefix)
+			{
+				string? label = null;
+				foreach (var l in pullRequest.Labels) {
+					if (!l.Name.StartsWith (prefix + "-", StringComparison.InvariantCultureIgnoreCase))
+						continue;
+
+					if (label != null) {
+						Console.WriteLine ($"PR {pullRequest.HtmlUrl} has multiple {prefix} labels");
+						continue;
+					}
+
+					label = l.Name;
 				}
 
-				area = l.Name;
+				return label;
 			}
-
-			if (area == null) {
-				Console.WriteLine ($"PR {pullRequest.HtmlUrl} has no area label");
-			}
-
-			return area;
 		}
 
 		static Dictionary<string, string> leadsCache = new Dictionary<string, string> (StringComparer.OrdinalIgnoreCase);
@@ -195,41 +213,50 @@ namespace prmonitor {
 			{ "@dleeapho", "Dan Leeaphon" },
 			{ "@HongGit", "Hong Li" },
 			{ "@marek-safar", "Marek Safar" },
-			{ "@kevinpi", "Kevin Pilch"}
+			{ "@kevinpi", "Kevin Pilch"},
+			{ "@jaredpar", "Jared Parsons"},
+			{ "@ajcvickers", "Arthur Vickers" },
 		};
 
 		static async Task PopulateLeadsArea ()
 		{
 			var http = new HttpClient ();
 			var data = await http.GetStringAsync ("https://raw.githubusercontent.com/dotnet/runtime/master/docs/area-owners.md");
-			bool first = true;
-			foreach (var line in data.Split ("| area-")) {
-				if (first) {
-					first = false;
-					continue;
-				}
+			PopulateLeadsCache ("area-");
+			PopulateLeadsCache ("arch-");
+			PopulateLeadsCache ("os-");
 
-				var area_data = line.Split ('|');
-				if (area_data.Length < 2) {
-					Console.WriteLine ("Unexpected leads format");
-					continue;
-				}
+			void PopulateLeadsCache (string prefix)
+			{
+				bool first = true;
+				foreach (var line in data.Split ("| " + prefix)) {
+					if (first) {
+						first = false;
+						continue;
+					}
 
-				var area = "area-" + area_data[0].Trim ();
-				var lead = area_data[1].Trim ();
-				if (leadsCache.ContainsKey (area)) {
-					Console.WriteLine ($"Duplicate area lead for '{area}'");
-					continue;
-				}
+					var area_data = line.Split ('|');
+					if (area_data.Length < 2) {
+						Console.WriteLine ("Unexpected leads format");
+						continue;
+					}
 
-				leadsCache.Add (area, lead);
+					var area = prefix + area_data[0].Trim ();
+					var lead = area_data[1].Trim ();
+					if (leadsCache.ContainsKey (area)) {
+						Console.WriteLine ($"Duplicate area lead for '{area}'");
+						continue;
+					}
+
+					leadsCache.Add (area, lead);
+				}
 			}
 		}
 
-		static string GetAreaLead (string area)
+		static string GetScopeLead (string scope)
 		{
-			if (!leadsCache.TryGetValue (area, out var lead)) {
-				Console.WriteLine ("Missing lead for " + area);
+			if (!leadsCache.TryGetValue (scope, out var lead)) {
+				Console.WriteLine ("Missing lead for " + scope);
 				return "Unknown";
 			}
 
@@ -238,6 +265,18 @@ namespace prmonitor {
 
 			Console.WriteLine ("Missing lead alias mapping for " + lead);
 			return "??";
+		}
+
+		static string? GetMicrosoftUserName (string? login, GitHubClient client)
+		{
+			if (login is null)
+				return null;
+			// TODO: cache
+			var un = client.User.Get (login).Result;
+//			if (un.Company?.Contains ("Microsoft", StringComparison.InvariantCultureIgnoreCase) == true)
+				return un.Name;
+
+//			return null;
 		}
 	}
 }
