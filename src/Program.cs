@@ -159,7 +159,8 @@ namespace prmonitor {
 					sw.WriteLine ("<tr>");
 					sw.WriteLine ($"<td class=\"c1\"><a href=\"{ pr.HtmlUrl }\">{WebUtility.HtmlEncode (pr.Title.Trim ())}</a></td>");
 					sw.WriteLine ($"<td class=\"c2\">{ WebUtility.HtmlEncode (GetMicrosoftUserName (pr.Assignees.FirstOrDefault ()?.Login, client))}</td>");
-					sw.WriteLine ($"<td class=\"c3\">{ WebUtility.HtmlEncode (pr_scope[pr]?[5..])}</td>");
+					var scope = pr_scope[pr];
+					sw.WriteLine ($"<td class=\"c3\">{ WebUtility.HtmlEncode (scope?.Substring (scope.IndexOf ('-') + 1))}</td>");
 					sw.WriteLine ($"<td class=\"c4\">{ (DateTime.Today - item.Item2).TotalDays}</td>");
 					sw.WriteLine ("</tr>");
 				}
@@ -197,7 +198,11 @@ namespace prmonitor {
 			}
 		}
 
-		static Dictionary<string, string> leadsCache = new Dictionary<string, string> (StringComparer.OrdinalIgnoreCase);
+		static Dictionary<string, string> leadsCache = new Dictionary<string, string> (StringComparer.OrdinalIgnoreCase) {
+			{ "arch-loongarch64", "@mangod9" }, // TODO: Who should that be?
+			{ "os-linux", "@jeffhandley" }, // TODO: Who should that be?
+		};
+
 		static Dictionary<string, string> leadsNames = new Dictionary<string, string> () {
 			{ "@agocke", "Andy Gocke" },
 			{ "@SamMonoRT", "Sam Patel" },
@@ -216,6 +221,7 @@ namespace prmonitor {
 			{ "@kevinpi", "Kevin Pilch"},
 			{ "@jaredpar", "Jared Parsons"},
 			{ "@ajcvickers", "Arthur Vickers" },
+			{ "@danmoseley", "Dan Moseley"}
 		};
 
 		static async Task PopulateLeadsArea ()
