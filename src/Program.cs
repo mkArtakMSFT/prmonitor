@@ -227,7 +227,7 @@ namespace prmonitor {
 		static async Task PopulateLeadsArea ()
 		{
 			var http = new HttpClient ();
-			var data = await http.GetStringAsync ("https://raw.githubusercontent.com/dotnet/runtime/master/docs/area-owners.md");
+			var data = await http.GetStringAsync ("https://raw.githubusercontent.com/dotnet/runtime/main/docs/area-owners.md");
 			PopulateLeadsCache ("area-");
 			PopulateLeadsCache ("arch-");
 			PopulateLeadsCache ("os-");
