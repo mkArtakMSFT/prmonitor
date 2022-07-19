@@ -57,7 +57,7 @@ namespace prmonitor {
 
 			using (var input = new StreamReader (res!, Encoding.UTF8)) {
 				var text = input.ReadToEnd ().Replace ("##BODY##", sw.ToString ()).Replace ("##DATE##", DateTime.Today.ToString ("dd MMMM yyyy"));
-				File.WriteAllText ("../../../output.html", text);
+				File.WriteAllText ("output.html", text);
 			}
 
 			return;
@@ -67,7 +67,7 @@ namespace prmonitor {
 		{
 			// Is the latest commit date newer
 			var last_commit = client.Repository.Commit.Get (org, repo, pr.Head.Sha).Result;
-			var last_commit_date = last_commit.Commit.Author.Date.Date;
+			var last_commit_date = last_commit.Commit.Committer.Date.Date;
 			if (last_commit_date > activityDate) {
 				lastActivity = last_commit_date;
 				return true;
@@ -221,7 +221,8 @@ namespace prmonitor {
 			{ "@kevinpi", "Kevin Pilch"},
 			{ "@jaredpar", "Jared Parsons"},
 			{ "@ajcvickers", "Arthur Vickers" },
-			{ "@danmoseley", "Dan Moseley"}
+			{ "@danmoseley", "Dan Moseley"},
+			{ "@MichaelSimons", "Michael Simons"},
 		};
 
 		static async Task PopulateLeadsArea ()
