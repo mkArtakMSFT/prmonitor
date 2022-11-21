@@ -65,6 +65,12 @@ namespace prmonitor {
 
 		static bool IsActivePR (GitHubClient client, PullRequest pr, DateTime activityDate, out DateTime lastActivity)
 		{
+			// Was the PR created recently
+			if (pr.CreatedAt > activityDate) {
+				lastActivity = pr.CreatedAt.Date;
+				return true;
+			}
+
 			// Is the latest commit date newer
 			var last_commit = client.Repository.Commit.Get (org, repo, pr.Head.Sha).Result;
 			var last_commit_date = last_commit.Commit.Committer.Date.Date;
@@ -223,6 +229,7 @@ namespace prmonitor {
 			{ "@ajcvickers", "Arthur Vickers" },
 			{ "@danmoseley", "Dan Moseley"},
 			{ "@MichaelSimons", "Michael Simons"},
+			{ "@adityamandaleeka", "Aditya Mandaleeka"},
 		};
 
 		static async Task PopulateLeadsArea ()
@@ -270,7 +277,7 @@ namespace prmonitor {
 			if (leadsNames.TryGetValue (lead, out var name))
 				return name;
 
-			Console.WriteLine ("Missing lead alias mapping for " + lead);
+			Console.WriteLine ($"Missing lead alias mapping for {lead}");
 			return "??";
 		}
 
