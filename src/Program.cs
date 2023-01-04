@@ -28,7 +28,7 @@ namespace prmonitor {
 			var prs = client.PullRequest.GetAllForRepository (org, repo, request).Result;
 
 			var rl = client.GetLastApiInfo ().RateLimit;
-			Console.WriteLine ($"Remaining api limit {rl.Remaining} will reset at {rl.Reset.ToLocalTime ()}");
+			Console.WriteLine ($"Remaining GH api limit {rl.Remaining} will reset at {rl.Reset.ToLocalTime ()}");
 
 			DateTime cutDate = DateTime.Today.AddDays (-21);
 
@@ -230,12 +230,13 @@ namespace prmonitor {
 			{ "@danmoseley", "Dan Moseley"},
 			{ "@MichaelSimons", "Michael Simons"},
 			{ "@adityamandaleeka", "Aditya Mandaleeka"},
+			{ "@David-Engel", "David Engel"},
 		};
 
 		static async Task PopulateLeadsArea ()
 		{
 			var http = new HttpClient ();
-			var data = await http.GetStringAsync ("https://raw.githubusercontent.com/dotnet/runtime/main/docs/area-owners.md");
+			var data = await http.GetStringAsync ($"https://raw.githubusercontent.com/{org}/{repo}/main/docs/area-owners.md");
 			PopulateLeadsCache ("area-");
 			PopulateLeadsCache ("arch-");
 			PopulateLeadsCache ("os-");
@@ -285,12 +286,9 @@ namespace prmonitor {
 		{
 			if (login is null)
 				return null;
-			// TODO: cache
-			var un = client.User.Get (login).Result;
-//			if (un.Company?.Contains ("Microsoft", StringComparison.InvariantCultureIgnoreCase) == true)
-				return un.Name;
 
-//			return null;
+			var un = client.User.Get (login).Result;
+			return un.Name;
 		}
 	}
 }
