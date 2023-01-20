@@ -9,7 +9,8 @@
 ##BODY##
   <div id="footer">
   <p>
-    The report was generated on ##DATE## and includes all open pull requests which are not in Draft mode and have not been updated in the past 21 days. The leads with most open pull requests are at the top. Detailed statistics about all pull requests can be found at <a href="https://aka.ms/dotnetruntimepulls">https://aka.ms/dotnetruntimepulls</a>.
+    The report was generated on ##DATE## and includes all open pull requests with `community-contribution` label which were created on or before 14 days ago.
+    If you'd like to make changes to this report, feel free to submit a PR at: https://github.com/mkArtakMSFT/prmonitor
   </p>
   </div>
   </div>
