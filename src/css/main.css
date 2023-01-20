@@ -29,11 +29,11 @@ tr:nth-child(even){background-color: #f2f2f2;}
 tr:hover {background-color: #ddd;}
 
 th {
-  padding-top:4px;
-  padding-bottom: 4px;
-  text-align: left;
-  background-color: #932432;
-  color: white;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    text-align: left;
+    background-color: #556993;
+    color: white;
 }
 
 .c1 {
