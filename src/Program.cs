@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace prmonitor
 {
@@ -17,7 +18,7 @@ namespace prmonitor
         /// Pass in the PAT for accessing the github repo as the first argument to the program when called
         /// </summary>
         /// <param name="args"></param>
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
             //PopulateLeadsArea().Wait();
 
@@ -26,7 +27,7 @@ namespace prmonitor
 
             var request = new PullRequestRequest()
             {
-                State = ItemStateFilter.Open
+                State = ItemStateFilter.Open,
                 //Base = "main"
             };
 
@@ -45,8 +46,21 @@ namespace prmonitor
                 if (!pr.Labels.Any(l => l.Name == "community-contribution"))
                     continue;
 
-                if (pr.CreatedAt <= cutDate)
-                    inactivePrsList.Add((pr, pr.CreatedAt));
+                // Ignore draft PRs
+                if (pr.Draft)
+                    continue;
+
+                if (pr.CreatedAt > cutDate)
+                    continue;
+
+                var prCommits = await client.PullRequest.Commits(org, repo, pr.Number);
+                if (prCommits.Last().Commit.Author.Date > cutDate)
+                {
+                    // There was a recent commit on this PR, so not flagging as `stale
+                    continue;
+                }
+
+                inactivePrsList.Add((pr, pr.CreatedAt));
             }
 
             using StringWriter sw = new StringWriter();
