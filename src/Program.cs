@@ -54,13 +54,14 @@ namespace prmonitor
                     continue;
 
                 var prCommits = await client.PullRequest.Commits(org, repo, pr.Number);
-                if (prCommits.Last().Commit.Author.Date > cutDate)
+                var lastCommitDate = prCommits.Last().Commit.Author.Date;
+                if (lastCommitDate > cutDate)
                 {
                     // There was a recent commit on this PR, so not flagging as `stale
                     continue;
                 }
 
-                inactivePrsList.Add((pr, pr.CreatedAt));
+                inactivePrsList.Add((pr, lastCommitDate));
             }
 
             using StringWriter sw = new StringWriter();
@@ -125,7 +126,7 @@ namespace prmonitor
                 sw.WriteLine($"<p>{WebUtility.HtmlEncode(group.Lead)}</p>");
 
                 sw.WriteLine("<table>");
-                sw.WriteLine("<thead><tr><th>Pull Request</th><th>Assignee</th><th>Scope</th><th>Stale Days</th></thead>");
+                sw.WriteLine("<thead><tr><th>Pull Request</th><th>Assignee</th><th>Area</th><th>Stale Days</th></thead>");
                 sw.WriteLine("<tbody>");
 
                 foreach (var item in group.Items)

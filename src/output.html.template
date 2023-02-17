@@ -9,7 +9,7 @@
 ##BODY##
   <div id="footer">
   <p>
-    The report was generated on ##DATE## and includes all open pull requests with `community-contribution` label which were created on or before 14 days ago.
+    The report was generated on ##DATE## and includes all open pull requests with `community-contribution` label were created on or before 14 days ago and have no recent commits.
     If you'd like to make changes to this report, feel free to submit a PR at: <a href="https://github.com/mkArtakMSFT/prmonitor">https://github.com/mkArtakMSFT/prmonitor</a>
   </p>
   </div>
