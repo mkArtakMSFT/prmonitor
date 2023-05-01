@@ -42,8 +42,12 @@ namespace prmonitor
 
             foreach (PullRequest pr in prs)
             {
-                // Ignore non community contribution labels
+                // Ignore non community contribution PRs
                 if (!pr.Labels.Any(l => l.Name == "community-contribution"))
+                    continue;
+
+                // Ignore those PRs which are pending author input
+                if (pr.Labels.Any(l => l.Name == "pr: pending author input"))
                     continue;
 
                 // Ignore draft PRs
