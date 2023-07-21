@@ -6,6 +6,11 @@
   </head>
   <body>
   <div>
+  Hi.
+  <br /><br />
+  Below is the weekly stale community PR report for the dotnet/aspnetcore repo.
+  </div>
+  <div>
 ##BODY##
   <div id="footer">
   <p>
