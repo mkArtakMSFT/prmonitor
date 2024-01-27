@@ -11,9 +11,12 @@
   Below is the weekly stale community PR report for the dotnet/aspnetcore repo.
   </div>
   <div>
+    ##RECOGNITIONS##
+  </div>
+  <div>
 ##BODY##
   <div id="footer">
-  <p>
+  <p style="font-size: 10">
     The report was generated on ##DATE## and includes all open pull requests with `community-contribution` label were created on or before 14 days ago and have no recent commits.
     If you'd like to make changes to this report, feel free to submit a PR at: <a href="https://github.com/mkArtakMSFT/prmonitor">https://github.com/mkArtakMSFT/prmonitor</a>
   </p>

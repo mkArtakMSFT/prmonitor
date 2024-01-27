@@ -1,4 +1,4 @@
-using Octokit;
+﻿using Octokit;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -13,6 +13,12 @@ partial class Program
 {
     const string org = "dotnet";
     const string repo = "aspnetcore";
+    const int cutoffDays = 14;
+    private const string communityContributionLabel = "community-contribution";
+    private const string template_body = "##BODY##";
+    private const string template_recognitions = "##RECOGNITIONS##";
+    private const int cutoffDaysForMergedPRs = 7;
+
     private static Dictionary<string, string> msUserNamesCache = new Dictionary<string, string>();
 
     /// <summary>
@@ -21,30 +27,31 @@ partial class Program
     /// <param name="args"></param>
     static async Task Main(string[] args)
     {
-        //PopulateLeadsArea().Wait();
-
         GitHubClient client = new GitHubClient(new ProductHeaderValue("Octokit.Samples"));
         client.Credentials = new Credentials(args[0]);
 
-        var request = new PullRequestRequest()
+        var mergedCommunityPRs = await GetMergedCommunityPullRequests(client, org, repo, DateTime.Now.AddDays(-cutoffDaysForMergedPRs));
+        var mergedPRsReport = GenerateReportForMergedPullRequests(mergedCommunityPRs);
+
+        var openPRsRequest = new PullRequestRequest()
         {
             State = ItemStateFilter.Open,
             //Base = "main"
         };
 
-        var prs = client.PullRequest.GetAllForRepository(org, repo, request).Result;
-
+        var openPRs = client.PullRequest.GetAllForRepository(org, repo, openPRsRequest).Result;
         var rl = client.GetLastApiInfo().RateLimit;
         Console.WriteLine($"Remaining GH api limit {rl.Remaining} will reset at {rl.Reset.ToLocalTime()}");
 
-        DateTimeOffset cutDate = DateTimeOffset.Now.AddDays(-14);
+
+        DateTimeOffset cutDate = DateTimeOffset.Now.AddDays(-cutoffDays);
 
         var inactivePrsList = new List<(PullRequest, DateTimeOffset)>();
 
-        foreach (PullRequest pr in prs)
+        foreach (PullRequest pr in openPRs)
         {
             // Ignore non community contribution PRs
-            if (!pr.Labels.Any(l => l.Name == "community-contribution"))
+            if (!pr.Labels.Any(l => l.Name == communityContributionLabel))
                 continue;
 
             // Ignore those PRs which are pending author input
@@ -75,11 +82,66 @@ partial class Program
         var res = typeof(Program).Assembly.GetManifestResourceStream("prmonitor.output.html.template");
 
         using var input = new StreamReader(res!, Encoding.UTF8);
-        var text = input.ReadToEnd().Replace("##BODY##", sw.ToString()).Replace("##DATE##", DateTime.Today.ToString("dd MMMM yyyy"));
+        var text = input.ReadToEnd().Replace(template_body, sw.ToString()).Replace("##DATE##", DateTime.Today.ToString("dd MMMM yyyy"));
+        text = text.Replace(template_recognitions, mergedPRsReport);
+
         File.WriteAllText("output.html", text);
 
         return;
     }
+
+    private static string GenerateReportForMergedPullRequests(IReadOnlyList<PullRequest> mergedCommunityPRs)
+    {
+        if (mergedCommunityPRs.Count == 0)
+            return string.Empty;
+
+        var result = new StringBuilder();
+        var mergedPRsByAuthors = new Dictionary<string, int>();
+
+        foreach (var pr in mergedCommunityPRs)
+        {
+            var mergedBy = pr.MergedBy.Login;
+
+            if (mergedPRsByAuthors.TryGetValue(mergedBy, out var count))
+                count++;
+            else
+                count = 1;
+
+            mergedPRsByAuthors[mergedBy] = count;
+        }
+        result.Append($"<br /><div style='font-weight:bold'>Community PRs merged during last {cutoffDaysForMergedPRs} days</div>");
+        result.Append("<table><tr><th>Merged By</th><th>Number of PRs merged</th></tr>");
+        foreach (var item in mergedPRsByAuthors.OrderByDescending(i => i.Value))
+        {
+            result.AppendLine(GenerateHtmlTemplateForMergedPR(item.Key, item.Value));
+        }
+
+        result.Append("</table>");
+
+        return result.ToString();
+    }
+
+    private static string GenerateHtmlTemplateForMergedPR(string login, int count)
+    {
+        var stars = string.Join(' ', Enumerable.Repeat("⭐", count));
+        return $"<tr><td>{login}</td><td>{stars}</td></tr>";
+    }
+
+    private static async Task<IReadOnlyList<PullRequest>> GetMergedCommunityPullRequests(GitHubClient client, string org, string repo, DateTime dateTime)
+    {
+        const string queryDateFormat = "yyyy-MM-dd";
+
+        var result = new List<PullRequest>();
+
+        var searchResults = await client.Search.SearchIssues(new SearchIssuesRequest($"is:pr repo:{org}/{repo} is:merged label:{communityContributionLabel} created:>{dateTime.ToString(queryDateFormat)}"));
+        foreach (var item in searchResults.Items)
+        {
+            result.Add(await client.PullRequest.Get(org, repo, item.Number));
+        }
+
+        return result.AsReadOnly();
+    }
+
 
     static void ReportInactivePRs(List<(PullRequest, DateTimeOffset)> pullRequests, StringWriter sw, GitHubClient client)
     {
