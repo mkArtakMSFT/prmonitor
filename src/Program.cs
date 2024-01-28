@@ -16,6 +16,7 @@ partial class Program
     private const string template_recognitions = "##RECOGNITIONS##";
     private const int cutoffDaysForMergedPRs = 7;
     private const int cutoffDaysForInactiveCommunityPRs = 14;
+    private const int communityPrSLAInDays = 60;
 
     /// <summary>
     /// Pass in the PAT for accessing the github repo as the first argument to the program when called
@@ -29,7 +30,7 @@ partial class Program
         var userNameResolver = new UserNameResolver(client);
 
         var reportDataRetriever = new CommunityPRsReportDataRetriever(client, org, repo, cutoffDaysForInactiveCommunityPRs, communityContributionLabel);
-        var reportGenerator = new CommunityPRsReportGenearator(userNameResolver);
+        var reportGenerator = new CommunityPRsReportGenearator(userNameResolver, communityPrSLAInDays);
 
         string mergedPRsReport = await GeneratedMergedPRsReport(reportDataRetriever, reportGenerator);
 

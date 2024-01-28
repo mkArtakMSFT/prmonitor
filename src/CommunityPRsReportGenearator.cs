@@ -12,10 +12,12 @@ namespace prmonitor;
 internal class CommunityPRsReportGenearator
 {
     private IUserNameResolver _userNameResolver;
+    private int _communityPrSLAInDays;
 
-    public CommunityPRsReportGenearator(IUserNameResolver userNameResolver)
+    public CommunityPRsReportGenearator(IUserNameResolver userNameResolver, int communityPrSLAInDays)
     {
         _userNameResolver = userNameResolver;
+        _communityPrSLAInDays = communityPrSLAInDays;
     }
 
     public async Task<string> GenerateMergedPullRequestsReport(IReadOnlyList<PullRequest> mergedCommunityPRs, int cutoffDaysForMergedPRs)
@@ -101,14 +103,7 @@ internal class CommunityPRsReportGenearator
 
             foreach (var item in group.Items)
             {
-                var pr = item.Item1;
-                sw.WriteLine("<tr>");
-                sw.WriteLine($"<td class=\"c1\"><a href=\"{pr.HtmlUrl}\">{WebUtility.HtmlEncode(pr.Title.Trim())}</a></td>");
-                sw.WriteLine($"<td class=\"c2\">{WebUtility.HtmlEncode(await _userNameResolver.ResolveUsernameForLogin(pr.Assignees.FirstOrDefault()?.Login))}</td>");
-                var scope = pr_area[pr];
-                sw.WriteLine($"<td class=\"c3\">{WebUtility.HtmlEncode(scope?.Substring(scope.IndexOf('-') + 1))}</td>");
-                sw.WriteLine($"<td class=\"c4\">{(int)(DateTime.Today - item.Item2).TotalDays}</td>");
-                sw.WriteLine("</tr>");
+                await AppendPRInfo(sw, pr_area, item.Item1, item.Item2);
             }
 
             sw.WriteLine("</tbody>");
@@ -116,6 +111,34 @@ internal class CommunityPRsReportGenearator
         }
 
         return sw.ToString();
+    }
+
+    private async Task AppendPRInfo(StringWriter sw, Dictionary<PullRequest, string> pr_area, PullRequest pr, DateTimeOffset daysSincePRCreated)
+    {
+        sw.WriteLine("<tr>");
+
+        sw.WriteLine($"<td class=\"c1\"><a href=\"{pr.HtmlUrl}\">{WebUtility.HtmlEncode(pr.Title.Trim())}</a></td>");
+        sw.WriteLine($"<td class=\"c2\">{WebUtility.HtmlEncode(await _userNameResolver.ResolveUsernameForLogin(pr.Assignees.FirstOrDefault()?.Login))}</td>");
+        var scope = pr_area[pr];
+        sw.WriteLine($"<td class=\"c3\">{WebUtility.HtmlEncode(scope?.Substring(scope.IndexOf('-') + 1))}</td>");
+        AppendPrDaysCellDataToReport(sw, daysSincePRCreated);
+
+        sw.WriteLine("</tr>");
+    }
+
+    private void AppendPrDaysCellDataToReport(StringWriter sw, DateTimeOffset daysSincePRCreated)
+    {
+        var staleDays = (int)(DateTime.Today - daysSincePRCreated).TotalDays;
+        var cellContent = staleDays.ToString();
+        if (staleDays >= _communityPrSLAInDays)
+            cellContent += " ⚠️";
+
+        sw.Write("<td class=\"c4");
+        if (staleDays >= _communityPrSLAInDays)
+            sw.Write(" prDaysBeyondSLA");
+        sw.Write("\">");
+        sw.Write(WebUtility.HtmlEncode(cellContent));
+        sw.WriteLine("</td>");
     }
 
     private async Task<string> GenerateHtmlTemplateForMergedPR(string login, int count)

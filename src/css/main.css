@@ -67,3 +67,8 @@ th {
   font-size: .5rem;
 }
 
+.prDaysBeyondSLA {
+    font-weight: bolder;
+    color: red;
+}
+
