@@ -2,8 +2,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Net;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -30,13 +28,17 @@ partial class Program
 
         var userNameResolver = new UserNameResolver(client);
 
-        var reportGenerator = new CommunityPRsReportGenerator(client, userNameResolver, org, repo, cutoffDaysForMergedPRs, cutoffDaysForInactiveCommunityPRs, communityContributionLabel);
-        var mergedPRsReport = await reportGenerator.GenerateReportForMergedPullRequests();
+        var reportDataRetriever = new CommunityPRsReportDataRetriever(client, org, repo, cutoffDaysForInactiveCommunityPRs, communityContributionLabel);
+        var reportGenerator = new CommunityPRsReportGenearator(userNameResolver);
 
+        string mergedPRsReport = await GeneratedMergedPRsReport(reportDataRetriever, reportGenerator);
+
+#if DEBUG
         var rl = client.GetLastApiInfo().RateLimit;
         Console.WriteLine($"Remaining GH api limit {rl.Remaining} will reset at {rl.Reset.ToLocalTime()}");
+#endif
 
-        string inactiveCommunityPRsReport = await reportGenerator.GetInactiveCommunityPRsReport();
+        var inactiveCommunityPRsReport = await GetInactiveCommunityPRsReport(reportDataRetriever, reportGenerator);
 
         var res = typeof(Program).Assembly.GetManifestResourceStream("prmonitor.output.html.template");
 
@@ -47,5 +49,24 @@ partial class Program
         File.WriteAllText("output.html", text);
 
         return;
+    }
+
+    private static async Task<string> GeneratedMergedPRsReport(CommunityPRsReportDataRetriever reportDataRetriever, CommunityPRsReportGenearator reportGenerator)
+    {
+        var mergedPRsReport = string.Empty;
+        var mergedCommunityPRs = await reportDataRetriever.GetMergedCommunityPullRequests(DateTime.Now.AddDays(-cutoffDaysForMergedPRs));
+        if (mergedCommunityPRs.Count > 0)
+        {
+            mergedPRsReport = await reportGenerator.GenerateMergedPullRequestsReport(mergedCommunityPRs, cutoffDaysForMergedPRs);
+        }
+
+        return mergedPRsReport;
+    }
+
+    private static async Task<string> GetInactiveCommunityPRsReport(CommunityPRsReportDataRetriever reportDataRetriever, CommunityPRsReportGenearator reportGenerator)
+    {
+        List<(PullRequest, DateTimeOffset)> pullRequests = await reportDataRetriever.GetInactiveCommunityPRs();
+
+        return await reportGenerator.GenerateInactiveCommunityPRsReportInternal(pullRequests);
     }
 }

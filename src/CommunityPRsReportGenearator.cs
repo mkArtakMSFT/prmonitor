@@ -9,34 +9,17 @@ using System.Threading.Tasks;
 
 namespace prmonitor;
 
-internal class CommunityPRsReportGenerator
+internal class CommunityPRsReportGenearator
 {
-    private GitHubClient _client;
-    private string _org;
-    private string _repo;
-    private int _cutoffDaysForMergedPRs;
-    private int _cutoffDaysForInactiveCommunityPRs;
-    private string _communityContributionLabel;
     private IUserNameResolver _userNameResolver;
 
-    public CommunityPRsReportGenerator(GitHubClient client, IUserNameResolver userNameResolver, string org, string repo, int cutoffDaysForMergedPRs, int cutoffDaysForInactiveCommunityPRs, string communityContributionLabel)
+    public CommunityPRsReportGenearator(IUserNameResolver userNameResolver)
     {
-        _client = client;
-        _org = org;
-        _repo = repo;
-        _cutoffDaysForMergedPRs = cutoffDaysForMergedPRs;
-        _cutoffDaysForInactiveCommunityPRs = cutoffDaysForInactiveCommunityPRs;
-        _communityContributionLabel = communityContributionLabel;
         _userNameResolver = userNameResolver;
     }
 
-    public async Task<string> GenerateReportForMergedPullRequests()
+    public async Task<string> GenerateMergedPullRequestsReport(IReadOnlyList<PullRequest> mergedCommunityPRs, int cutoffDaysForMergedPRs)
     {
-        var mergedCommunityPRs = await GetMergedCommunityPullRequests(_org, _repo, DateTime.Now.AddDays(-_cutoffDaysForMergedPRs));
-
-        if (mergedCommunityPRs.Count == 0)
-            return string.Empty;
-
         var result = new StringBuilder();
         var mergedPRsByAuthors = new Dictionary<string, int>();
 
@@ -51,7 +34,7 @@ internal class CommunityPRsReportGenerator
 
             mergedPRsByAuthors[mergedBy] = count;
         }
-        result.Append($"<br /><div style='font-weight:bold'>Community PRs merged during last {_cutoffDaysForMergedPRs} days</div>");
+        result.Append($"<br /><div style='font-weight:bold'>Community PRs merged during last {cutoffDaysForMergedPRs} days</div>");
         result.Append("<table><tr><th>Merged By</th><th>Number of PRs merged</th></tr>");
         foreach (var item in mergedPRsByAuthors.OrderByDescending(i => i.Value))
         {
@@ -63,10 +46,8 @@ internal class CommunityPRsReportGenerator
         return result.ToString();
     }
 
-    public async Task<string> GetInactiveCommunityPRsReport()
+    public async Task<string> GenerateInactiveCommunityPRsReportInternal(List<(PullRequest, DateTimeOffset)> pullRequests)
     {
-        List<(PullRequest, DateTimeOffset)> pullRequests = await GetInactiveCommunityPRs();
-
         using StringWriter sw = new StringWriter();
 
         Dictionary<PullRequest, string?> pr_area = new Dictionary<PullRequest, string?>();
@@ -137,6 +118,13 @@ internal class CommunityPRsReportGenerator
         return sw.ToString();
     }
 
+    private async Task<string> GenerateHtmlTemplateForMergedPR(string login, int count)
+    {
+        var stars = string.Join(' ', Enumerable.Repeat("⭐", count));
+        var username = await _userNameResolver.ResolveUsernameForLogin(login);
+        return $"<tr><td>{username}</td><td>{stars}</td></tr>";
+    }
+
     private static string? GetAreaLabel(PullRequest pullRequest)
     {
         string? area = FindAreaLabel("area");
@@ -166,70 +154,5 @@ internal class CommunityPRsReportGenerator
 
             return label;
         }
-    }
-
-    private async Task<List<(PullRequest, DateTimeOffset)>> GetInactiveCommunityPRs()
-    {
-        var openPRsRequest = new PullRequestRequest()
-        {
-            State = ItemStateFilter.Open,
-            //Base = "main"
-        };
-
-        var openPRs = await _client.PullRequest.GetAllForRepository(_org, _repo, openPRsRequest);
-        var inactivePrsList = new List<(PullRequest, DateTimeOffset)>();
-        DateTimeOffset cutDate = DateTimeOffset.Now.AddDays(-_cutoffDaysForInactiveCommunityPRs);
-
-        foreach (PullRequest pr in openPRs)
-        {
-            // Ignore non community contribution PRs
-            if (!pr.Labels.Any(l => l.Name == _communityContributionLabel))
-                continue;
-
-            // Ignore those PRs which are pending author input
-            if (pr.Labels.Any(l => l.Name == "pr: pending author input"))
-                continue;
-
-            // Ignore draft PRs
-            if (pr.Draft)
-                continue;
-
-            if (pr.CreatedAt > cutDate)
-                continue;
-
-            var prCommits = await _client.PullRequest.Commits(_org, _repo, pr.Number);
-            var lastCommitDate = prCommits.Last().Commit.Author.Date;
-            if (lastCommitDate > cutDate)
-            {
-                // There was a recent commit on this PR, so not flagging as `stale
-                continue;
-            }
-
-            inactivePrsList.Add((pr, lastCommitDate));
-        }
-
-        return inactivePrsList;
-    }
-
-    private async Task<string> GenerateHtmlTemplateForMergedPR(string login, int count)
-    {
-        var stars = string.Join(' ', Enumerable.Repeat("⭐", count));
-        var username = await _userNameResolver.ResolveUsernameForLogin(login);
-        return $"<tr><td>{username}</td><td>{stars}</td></tr>";
-    }
-
-    private async Task<IReadOnlyList<PullRequest>> GetMergedCommunityPullRequests(string org, string repo, DateTime dateTime)
-    {
-        const string queryDateFormat = "yyyy-MM-dd";
-
-        var result = new List<PullRequest>();
-
-        var searchResults = await _client.Search.SearchIssues(new SearchIssuesRequest($"is:pr repo:{org}/{repo} is:merged label:{_communityContributionLabel} created:>{dateTime.ToString(queryDateFormat)}"));
-        foreach (var item in searchResults.Items)
-        {
-            result.Add(await _client.PullRequest.Get(org, repo, item.Number));
-        }
-
-        return result.AsReadOnly();
     }
 }
