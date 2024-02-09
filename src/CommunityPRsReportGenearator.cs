@@ -11,6 +11,10 @@ namespace prmonitor;
 
 internal class CommunityPRsReportGenearator
 {
+    private const string servicingApprovedLabelName = "servicing-approved";
+    private const string closedPRIcon = "🛡️";
+    private const string mergedPRIcon = "⭐";
+
     private IUserNameResolver _userNameResolver;
     private int _communityPrSLAInDays;
 
@@ -20,27 +24,38 @@ internal class CommunityPRsReportGenearator
         _communityPrSLAInDays = communityPrSLAInDays;
     }
 
-    public async Task<string> GenerateMergedPullRequestsReport(IReadOnlyList<PullRequest> mergedCommunityPRs, int cutoffDaysForMergedPRs)
+    public async Task<string> GenerateCompletedPullRequestsReport(IReadOnlyList<PullRequest> completedCommunityPRs, int cutoffDaysForCompletedPRs)
     {
         var result = new StringBuilder();
-        var mergedPRsByAuthors = new Dictionary<string, int>();
+        var completedPRsByAuthors = new Dictionary<string, List<PullRequest>>();
 
-        foreach (var pr in mergedCommunityPRs)
+        foreach (var pr in completedCommunityPRs)
         {
-            var mergedBy = pr.MergedBy.Login;
+            /// Ideally we would use `pr.MergedBy` information here, however this list includes PRs which weren't merged but closed,
+            /// and for those PRs the `mergeBy` will be `null`. Hence, the usage of `Assignee` as per the process the ASP.NET Core repo has in place,
+            /// it's the `Assignee`'s responsibility to close / merge PRs.
+            User userWhoHandledThePR = pr.Assignee;
+            if (pr.MergedBy is not null && !pr.Labels.Any(l => l.Name.Equals(servicingApprovedLabelName, StringComparison.OrdinalIgnoreCase)))
+                userWhoHandledThePR = pr.MergedBy;
+            var handledBy = userWhoHandledThePR.Login;
 
-            if (mergedPRsByAuthors.TryGetValue(mergedBy, out var count))
-                count++;
-            else
-                count = 1;
+            if (!completedPRsByAuthors.TryGetValue(handledBy, out var list))
+            {
+                list = new List<PullRequest>();
+                completedPRsByAuthors[handledBy] = list;
+            }
 
-            mergedPRsByAuthors[mergedBy] = count;
+            list.Add(pr);
         }
-        result.Append($"<br /><div style='font-weight:bold'>Community PRs merged during last {cutoffDaysForMergedPRs} days</div>");
-        result.Append("<table><tr><th>Merged By</th><th>Number of PRs merged</th></tr>");
-        foreach (var item in mergedPRsByAuthors.OrderByDescending(i => i.Value))
+
+        result.Append($"<br /><div style='font-weight:bold'>Community PRs handled during last {cutoffDaysForCompletedPRs} days</div>");
+        result.Append("<table><tr><th>Handled By</th><th>Number of PRs handled<br />");
+        result.Append($"({GetInfoLabelMarkup(mergedPRIcon, "Merged")} | {GetInfoLabelMarkup(closedPRIcon, "Closed")})");
+        result.Append("</th></tr>");
+
+        foreach (var item in completedPRsByAuthors.OrderByDescending(i => i.Value.Count))
         {
-            result.AppendLine(await GenerateHtmlTemplateForMergedPR(item.Key, item.Value));
+            result.AppendLine(await GenerateHtmlTemplateForCompletedPRs(item.Key, item.Value));
         }
 
         result.Append("</table>");
@@ -141,11 +156,28 @@ internal class CommunityPRsReportGenearator
         sw.WriteLine("</td>");
     }
 
-    private async Task<string> GenerateHtmlTemplateForMergedPR(string login, int count)
+    private async Task<string> GenerateHtmlTemplateForCompletedPRs(string login, List<PullRequest> prs)
     {
-        var stars = string.Join(' ', Enumerable.Repeat("⭐", count));
+        var starCount = prs.Count(p => p.Merged);
+        var closedCount = prs.Count(p => !p.Merged);
+
         var username = await _userNameResolver.ResolveUsernameForLogin(login);
-        return $"<tr><td>{username}</td><td>{stars}</td></tr>";
+        var result = new StringBuilder($"<tr><td>{username}</td><td>");
+
+        if (starCount > 0)
+            result.Append($"{starCount} {GetMarkupForIconWithTooltip(mergedPRIcon, "Merged PRs")}");
+
+        if (closedCount > 0)
+        {
+            if (starCount > 0)
+                result.Append("<br />");
+
+            result.Append($"{closedCount} {GetMarkupForIconWithTooltip(closedPRIcon, "Closed PRs")}");
+        }
+
+        result.Append("</td></tr>");
+
+        return result.ToString();
     }
 
     private static string? GetAreaLabel(PullRequest pullRequest)
@@ -177,5 +209,15 @@ internal class CommunityPRsReportGenearator
 
             return label;
         }
+    }
+
+    private static string GetMarkupForIconWithTooltip(string icon, string tooltipText)
+    {
+        return $"<span tooltip='{tooltipText}' class='tooltip'>{icon}</span>";
+    }
+
+    private string GetInfoLabelMarkup(string icon, string info)
+    {
+        return $"<span>{icon} - {info}</span>";
     }
 }

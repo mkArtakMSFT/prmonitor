@@ -14,7 +14,7 @@ partial class Program
     private const string communityContributionLabel = "community-contribution";
     private const string template_body = "##BODY##";
     private const string template_recognitions = "##RECOGNITIONS##";
-    private const int cutoffDaysForMergedPRs = 7;
+    private const int cutoffDaysForCompletedPRs = 7;
     private const int cutoffDaysForInactiveCommunityPRs = 14;
     private const int communityPrSLAInDays = 60;
 
@@ -32,7 +32,7 @@ partial class Program
         var reportDataRetriever = new CommunityPRsReportDataRetriever(client, org, repo, cutoffDaysForInactiveCommunityPRs, communityContributionLabel);
         var reportGenerator = new CommunityPRsReportGenearator(userNameResolver, communityPrSLAInDays);
 
-        string mergedPRsReport = await GeneratedMergedPRsReport(reportDataRetriever, reportGenerator);
+        string mergedPRsReport = await GeneratedCompletedPRsReport(reportDataRetriever, reportGenerator);
 
 #if DEBUG
         var rl = client.GetLastApiInfo().RateLimit;
@@ -52,13 +52,13 @@ partial class Program
         return;
     }
 
-    private static async Task<string> GeneratedMergedPRsReport(CommunityPRsReportDataRetriever reportDataRetriever, CommunityPRsReportGenearator reportGenerator)
+    private static async Task<string> GeneratedCompletedPRsReport(CommunityPRsReportDataRetriever reportDataRetriever, CommunityPRsReportGenearator reportGenerator)
     {
         var mergedPRsReport = string.Empty;
-        var mergedCommunityPRs = await reportDataRetriever.GetMergedCommunityPullRequests(DateTime.Now.AddDays(-cutoffDaysForMergedPRs));
-        if (mergedCommunityPRs.Count > 0)
+        var completedCommunityPRs = await reportDataRetriever.GetCompletedCommunityPullRequests(DateTime.Now.AddDays(-cutoffDaysForCompletedPRs));
+        if (completedCommunityPRs.Count > 0)
         {
-            mergedPRsReport = await reportGenerator.GenerateMergedPullRequestsReport(mergedCommunityPRs, cutoffDaysForMergedPRs);
+            mergedPRsReport = await reportGenerator.GenerateCompletedPullRequestsReport(completedCommunityPRs, cutoffDaysForCompletedPRs);
         }
 
         return mergedPRsReport;

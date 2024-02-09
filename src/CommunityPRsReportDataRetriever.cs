@@ -66,18 +66,18 @@ internal class CommunityPRsReportDataRetriever
         return inactivePrsList;
     }
 
-    public async Task<IReadOnlyList<PullRequest>> GetMergedCommunityPullRequests(DateTime dateTime)
+    public async Task<IReadOnlyList<PullRequest>> GetCompletedCommunityPullRequests(DateTime dateTime)
     {
-        return await GetMergedCommunityPullRequests(_org, _repo, dateTime);
+        return await GetCompletedCommunityPullRequests(_org, _repo, dateTime);
     }
 
-    private async Task<IReadOnlyList<PullRequest>> GetMergedCommunityPullRequests(string org, string repo, DateTime dateTime)
+    private async Task<IReadOnlyList<PullRequest>> GetCompletedCommunityPullRequests(string org, string repo, DateTime dateTime)
     {
         const string queryDateFormat = "yyyy-MM-dd";
 
         var result = new List<PullRequest>();
 
-        var searchResults = await _client.Search.SearchIssues(new SearchIssuesRequest($"is:pr repo:{org}/{repo} is:merged label:{_communityContributionLabel} created:>{dateTime.ToString(queryDateFormat)}"));
+        var searchResults = await _client.Search.SearchIssues(new SearchIssuesRequest($"is:pr repo:{org}/{repo} is:closed label:{_communityContributionLabel} closed:>{dateTime.ToString(queryDateFormat)}"));
         foreach (var item in searchResults.Items)
         {
             result.Add(await _client.PullRequest.Get(org, repo, item.Number));
