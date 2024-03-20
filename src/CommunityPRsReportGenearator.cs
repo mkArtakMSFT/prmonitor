@@ -37,7 +37,14 @@ internal class CommunityPRsReportGenearator
             User userWhoHandledThePR = pr.Assignee;
             if (pr.MergedBy is not null && !pr.Labels.Any(l => l.Name.Equals(servicingApprovedLabelName, StringComparison.OrdinalIgnoreCase)))
                 userWhoHandledThePR = pr.MergedBy;
-            var handledBy = userWhoHandledThePR.Login;
+
+            if (userWhoHandledThePR is null)
+            {
+                Console.WriteLine($"Unable to find an owner for PR #{pr.Number}");
+                continue;
+            }
+
+            string handledBy = userWhoHandledThePR.Login;
 
             if (!completedPRsByAuthors.TryGetValue(handledBy, out var list))
             {
