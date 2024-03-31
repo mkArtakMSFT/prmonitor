@@ -14,6 +14,7 @@ internal class CommunityPRsReportGenearator
     private const string servicingApprovedLabelName = "servicing-approved";
     private const string closedPRIcon = "🛡️";
     private const string mergedPRIcon = "⭐";
+    private const string helpWantedIssueIcon = "❔";
 
     private IUserNameResolver _userNameResolver;
     private int _communityPrSLAInDays;
@@ -24,10 +25,58 @@ internal class CommunityPRsReportGenearator
         _communityPrSLAInDays = communityPrSLAInDays;
     }
 
-    public async Task<string> GenerateCompletedPullRequestsReport(IReadOnlyList<PullRequest> completedCommunityPRs, int cutoffDaysForCompletedPRs)
+    public async Task<string> GenerateMembersRecognitionReport(IReadOnlyList<PullRequest> completedCommunityPRs, IDictionary<string, List<Issue>> helpWantedIssuesMap, int cutoffDaysForCompletedPRs)
     {
+        Dictionary<string, MemberRecognitionRecord> completedPRsByAuthors = GroupPRsByMember(completedCommunityPRs);
+
+        List<MemberRecognitionRecord> reportData = GenerateReportData(helpWantedIssuesMap, completedPRsByAuthors);
+
         var result = new StringBuilder();
-        var completedPRsByAuthors = new Dictionary<string, List<PullRequest>>();
+
+        result.Append($"<br /><div style='font-weight:bold'>Community help report for the last {cutoffDaysForCompletedPRs} days</div>");
+        result.Append("<table><tr><th>Member</th>");
+        result.Append($"<th>Number of Merged PRs ({GetInfoLabelMarkup(mergedPRIcon, "Merged PRs")})</th>");
+        result.Append($"<th>Number of Closed PRs ({GetInfoLabelMarkup(closedPRIcon, "Closed PRs")})</th>");
+        result.Append($"<th>Number of Issues labeled as `help wanted` ({GetInfoLabelMarkup(helpWantedIssueIcon, "Help Wanted Issues")})</th>");
+        result.Append("</tr>");
+
+        foreach (var item in reportData.OrderByDescending(i => i.PullRequests.Count))
+        {
+            result.AppendLine(await GenerateHtmlTemplateForMemberRecognition(item.Member, item));
+        }
+
+        result.Append("</table>");
+
+        return result.ToString();
+    }
+
+    private static List<MemberRecognitionRecord> GenerateReportData(IDictionary<string, List<Issue>> helpWantedIssuesMap, Dictionary<string, MemberRecognitionRecord> completedPRsByAuthors)
+    {
+        var reportData = new List<MemberRecognitionRecord>();
+        var allUsers = completedPRsByAuthors.Keys.Union(helpWantedIssuesMap.Keys).Distinct();
+        foreach (var user in allUsers)
+        {
+            MemberRecognitionRecord recognition;
+            if (!completedPRsByAuthors.TryGetValue(user, out recognition))
+            {
+                recognition = new MemberRecognitionRecord(user);
+            }
+
+            reportData.Add(recognition);
+
+            List<Issue> convertedIssues;
+            if (helpWantedIssuesMap.TryGetValue(user, out convertedIssues))
+            {
+                recognition.ConvertedHelpWantedIssues.AddRange(convertedIssues);
+            }
+        }
+
+        return reportData;
+    }
+
+    private static Dictionary<string, MemberRecognitionRecord> GroupPRsByMember(IReadOnlyList<PullRequest> completedCommunityPRs)
+    {
+        var completedPRsByAuthors = new Dictionary<string, MemberRecognitionRecord>();
 
         foreach (var pr in completedCommunityPRs)
         {
@@ -46,28 +95,16 @@ internal class CommunityPRsReportGenearator
 
             string handledBy = userWhoHandledThePR.Login;
 
-            if (!completedPRsByAuthors.TryGetValue(handledBy, out var list))
+            if (!completedPRsByAuthors.TryGetValue(handledBy, out var recognitionRecord))
             {
-                list = new List<PullRequest>();
-                completedPRsByAuthors[handledBy] = list;
+                recognitionRecord = new MemberRecognitionRecord(handledBy);
+                completedPRsByAuthors[handledBy] = recognitionRecord;
             }
 
-            list.Add(pr);
+            recognitionRecord.PullRequests.Add(pr);
         }
 
-        result.Append($"<br /><div style='font-weight:bold'>Community PRs handled during last {cutoffDaysForCompletedPRs} days</div>");
-        result.Append("<table><tr><th>Handled By</th><th>Number of PRs handled<br />");
-        result.Append($"({GetInfoLabelMarkup(mergedPRIcon, "Merged")} | {GetInfoLabelMarkup(closedPRIcon, "Closed")})");
-        result.Append("</th></tr>");
-
-        foreach (var item in completedPRsByAuthors.OrderByDescending(i => i.Value.Count))
-        {
-            result.AppendLine(await GenerateHtmlTemplateForCompletedPRs(item.Key, item.Value));
-        }
-
-        result.Append("</table>");
-
-        return result.ToString();
+        return completedPRsByAuthors;
     }
 
     public async Task<string> GenerateInactiveCommunityPRsReportInternal(List<(PullRequest, DateTimeOffset)> pullRequests)
@@ -163,10 +200,11 @@ internal class CommunityPRsReportGenearator
         sw.WriteLine("</td>");
     }
 
-    private async Task<string> GenerateHtmlTemplateForCompletedPRs(string login, List<PullRequest> prs)
+    private async Task<string> GenerateHtmlTemplateForMemberRecognition(string login, MemberRecognitionRecord recognition)
     {
-        var starCount = prs.Count(p => p.Merged);
-        var closedCount = prs.Count(p => !p.Merged);
+        var starCount = recognition.PullRequests.Count(p => p.Merged);
+        var closedCount = recognition.PullRequests.Count(p => !p.Merged);
+        var helpWantedCount = recognition.ConvertedHelpWantedIssues.Count;
 
         var username = await _userNameResolver.ResolveUsernameForLogin(login);
         var result = new StringBuilder($"<tr><td>{username}</td><td>");
@@ -174,6 +212,7 @@ internal class CommunityPRsReportGenearator
         if (starCount > 0)
             result.Append($"{starCount} {GetMarkupForIconWithTooltip(mergedPRIcon, "Merged PRs")}");
 
+        result.Append("</td><td>");
         if (closedCount > 0)
         {
             if (starCount > 0)
@@ -181,6 +220,11 @@ internal class CommunityPRsReportGenearator
 
             result.Append($"{closedCount} {GetMarkupForIconWithTooltip(closedPRIcon, "Closed PRs")}");
         }
+
+        result.Append("</td><td>");
+
+        if (helpWantedCount > 0)
+            result.Append($"{helpWantedCount} {GetMarkupForIconWithTooltip(helpWantedIssueIcon, "Help Wanted Issues")}");
 
         result.Append("</td></tr>");
 
@@ -225,6 +269,6 @@ internal class CommunityPRsReportGenearator
 
     private string GetInfoLabelMarkup(string icon, string info)
     {
-        return $"<span>{icon} - {info}</span>";
+        return $"<span>{icon}</span>";
     }
 }
