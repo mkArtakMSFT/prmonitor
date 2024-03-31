@@ -30,9 +30,12 @@ partial class Program
         var userNameResolver = new UserNameResolver(client);
 
         var reportDataRetriever = new CommunityPRsReportDataRetriever(client, org, repo, cutoffDaysForInactiveCommunityPRs, communityContributionLabel);
+
+        var helpWantedIssuesRetriever = new HelpWantedIssuesDataRetriever(client, org, repo);
+
         var reportGenerator = new CommunityPRsReportGenearator(userNameResolver, communityPrSLAInDays);
 
-        string mergedPRsReport = await GeneratedCompletedPRsReport(reportDataRetriever, reportGenerator);
+        string recognitionReport = await GenerateMemberRecognitionReport(reportDataRetriever, helpWantedIssuesRetriever, reportGenerator);
 
 #if DEBUG
         var rl = client.GetLastApiInfo().RateLimit;
@@ -48,20 +51,22 @@ partial class Program
         var builder = new StringBuilder(text);
         builder.Replace(template_body, inactiveCommunityPRsReport)
             .Replace("##DATE##", DateTime.Today.ToString("dd MMMM yyyy"))
-            .Replace(template_recognitions, mergedPRsReport);
+            .Replace(template_recognitions, recognitionReport);
 
         await File.WriteAllTextAsync("output.html", builder.ToString());
 
         return;
     }
 
-    private static async Task<string> GeneratedCompletedPRsReport(CommunityPRsReportDataRetriever reportDataRetriever, CommunityPRsReportGenearator reportGenerator)
+    private static async Task<string> GenerateMemberRecognitionReport(CommunityPRsReportDataRetriever reportDataRetriever, HelpWantedIssuesDataRetriever helpWantedIssuesRetriever, CommunityPRsReportGenearator reportGenerator)
     {
         var mergedPRsReport = string.Empty;
         var completedCommunityPRs = await reportDataRetriever.GetCompletedCommunityPullRequests(DateTime.Now.AddDays(-cutoffDaysForCompletedPRs));
-        if (completedCommunityPRs.Count > 0)
+        var helpWantedIssues = await helpWantedIssuesRetriever.RetrieveHelpWantedIssuesConvertedSinceAsync(DateTimeOffset.UtcNow.AddDays(-cutoffDaysForCompletedPRs));
+
+        if (completedCommunityPRs.Count > 0 || helpWantedIssues.Count > 0)
         {
-            mergedPRsReport = await reportGenerator.GenerateCompletedPullRequestsReport(completedCommunityPRs, cutoffDaysForCompletedPRs);
+            mergedPRsReport = await reportGenerator.GenerateMembersRecognitionReport(completedCommunityPRs, helpWantedIssues, cutoffDaysForCompletedPRs);
         }
 
         return mergedPRsReport;
