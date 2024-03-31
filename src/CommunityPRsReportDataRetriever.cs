@@ -6,19 +6,13 @@ using System.Threading.Tasks;
 
 namespace prmonitor;
 
-internal class CommunityPRsReportDataRetriever
+internal class CommunityPRsReportDataRetriever : GitHubDataRetrieverBase
 {
-    private GitHubClient _client;
-    private string _org;
-    private string _repo;
     private int _cutoffDaysForInactiveCommunityPRs;
     private string _communityContributionLabel;
 
-    public CommunityPRsReportDataRetriever(GitHubClient client, string org, string repo, int cutoffDaysForInactiveCommunityPRs, string communityContributionLabel)
+    public CommunityPRsReportDataRetriever(GitHubClient client, string org, string repo, int cutoffDaysForInactiveCommunityPRs, string communityContributionLabel) : base(client, org, repo)
     {
-        _client = client;
-        _org = org;
-        _repo = repo;
         _cutoffDaysForInactiveCommunityPRs = cutoffDaysForInactiveCommunityPRs;
         _communityContributionLabel = communityContributionLabel;
     }
@@ -31,7 +25,7 @@ internal class CommunityPRsReportDataRetriever
             //Base = "main"
         };
 
-        var openPRs = await _client.PullRequest.GetAllForRepository(_org, _repo, openPRsRequest);
+        var openPRs = await Client.PullRequest.GetAllForRepository(Org, Repo, openPRsRequest);
         var inactivePrsList = new List<(PullRequest, DateTimeOffset)>();
         DateTimeOffset cutDate = DateTimeOffset.Now.AddDays(-_cutoffDaysForInactiveCommunityPRs);
 
@@ -52,7 +46,7 @@ internal class CommunityPRsReportDataRetriever
             if (pr.CreatedAt > cutDate)
                 continue;
 
-            var prCommits = await _client.PullRequest.Commits(_org, _repo, pr.Number);
+            var prCommits = await Client.PullRequest.Commits(Org, Repo, pr.Number);
             var lastCommitDate = prCommits.Last().Commit.Author.Date;
             if (lastCommitDate > cutDate)
             {
@@ -68,19 +62,14 @@ internal class CommunityPRsReportDataRetriever
 
     public async Task<IReadOnlyList<PullRequest>> GetCompletedCommunityPullRequests(DateTime dateTime)
     {
-        return await GetCompletedCommunityPullRequests(_org, _repo, dateTime);
-    }
-
-    private async Task<IReadOnlyList<PullRequest>> GetCompletedCommunityPullRequests(string org, string repo, DateTime dateTime)
-    {
         const string queryDateFormat = "yyyy-MM-dd";
 
         var result = new List<PullRequest>();
 
-        var searchResults = await _client.Search.SearchIssues(new SearchIssuesRequest($"is:pr repo:{org}/{repo} is:closed label:{_communityContributionLabel} closed:>{dateTime.ToString(queryDateFormat)}"));
+        var searchResults = await Client.Search.SearchIssues(new SearchIssuesRequest($"is:pr repo:{Org}/{Repo} is:closed label:{_communityContributionLabel} closed:>{dateTime.ToString(queryDateFormat)}"));
         foreach (var item in searchResults.Items)
         {
-            result.Add(await _client.PullRequest.Get(org, repo, item.Number));
+            result.Add(await Client.PullRequest.Get(Org, Repo, item.Number));
         }
 
         return result.AsReadOnly();
