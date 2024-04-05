@@ -14,7 +14,7 @@ internal class CommunityPRsReportGenearator
     private const string servicingApprovedLabelName = "servicing-approved";
     private const string closedPRIcon = "🛡️";
     private const string mergedPRIcon = "⭐";
-    private const string helpWantedIssueIcon = "❔";
+    private const string helpWantedIssueIcon = "🔰";
 
     private IUserNameResolver _userNameResolver;
     private int _communityPrSLAInDays;
