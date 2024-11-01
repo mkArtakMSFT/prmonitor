@@ -9,6 +9,7 @@
     <PackageReference Include="Octokit" Version="10.0.0" />
   </ItemGroup>
   <ItemGroup>
+    <None Remove="output.html" />
     <None Remove="output.html.template" />
   </ItemGroup>
   <ItemGroup>
