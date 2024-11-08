@@ -53,7 +53,7 @@ internal class CommunityPRsReportGenearator
     private static List<MemberRecognitionRecord> GenerateReportData(IDictionary<string, List<Issue>> helpWantedIssuesMap, Dictionary<string, MemberRecognitionRecord> completedPRsByAuthors)
     {
         var reportData = new List<MemberRecognitionRecord>();
-        var allUsers = completedPRsByAuthors.Keys.Union(helpWantedIssuesMap.Keys).Distinct();
+        var allUsers = completedPRsByAuthors.Keys.Union(helpWantedIssuesMap.Keys, StringComparer.OrdinalIgnoreCase);
         foreach (var user in allUsers)
         {
             MemberRecognitionRecord recognition;
@@ -65,7 +65,7 @@ internal class CommunityPRsReportGenearator
             reportData.Add(recognition);
 
             List<Issue> convertedIssues;
-            if (helpWantedIssuesMap.TryGetValue(user, out convertedIssues))
+            if (helpWantedIssuesMap.TryGetValue(user.ToLower(), out convertedIssues))
             {
                 recognition.ConvertedHelpWantedIssues.AddRange(convertedIssues);
             }
