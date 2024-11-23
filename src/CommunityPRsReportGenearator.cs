@@ -107,22 +107,22 @@ internal class CommunityPRsReportGenearator
         return completedPRsByAuthors;
     }
 
-    public async Task<string> GenerateInactiveCommunityPRsReportInternal(List<(PullRequest, DateTimeOffset)> pullRequests)
+    public async Task<string> GenerateInactiveCommunityPRsReportInternal(List<PullRequestAndLastCommitDate> pullRequests)
     {
         using StringWriter sw = new StringWriter();
 
-        Dictionary<PullRequest, string?> pr_area = new Dictionary<PullRequest, string?>();
+        Dictionary<PullRequest, string?> prAreasMap = new Dictionary<PullRequest, string?>();
         foreach (var item in pullRequests)
         {
-            var pr = item.Item1;
-            pr_area.Add(pr, GetAreaLabel(pr));
+            var pr = item.PullRequest;
+            prAreasMap.Add(pr, GetAreaLabel(pr));
         }
 
-        Dictionary<PullRequest, string?> pr_owner = new Dictionary<PullRequest, string?>();
+        Dictionary<PullRequest, string?> prOwnersMap = new Dictionary<PullRequest, string?>();
         foreach (var item in pullRequests)
         {
-            var pr = item.Item1;
-            var area = pr_area[pr];
+            var pr = item.PullRequest;
+            var area = prAreasMap[pr];
             if (area is null)
                 continue;
 
@@ -132,7 +132,7 @@ internal class CommunityPRsReportGenearator
                 var mun = await _userNameResolver.ResolveUsernameForLogin(assignee);
                 if (mun is not null)
                 {
-                    pr_owner.Add(pr, mun);
+                    prOwnersMap.Add(pr, mun);
                     continue;
                 }
             }
@@ -142,27 +142,29 @@ internal class CommunityPRsReportGenearator
         // Group by Area, then by largest count in the area, then date
         //
         var grouping = pullRequests.
-            Where(l => pr_owner.ContainsKey(l.Item1)).
-            GroupBy(l => pr_owner[l.Item1]).
+            // Filter out PRs without an area label
+            Where(l => prOwnersMap.ContainsKey(l.PullRequest)).
+            // Group PRs by the area owner
+            GroupBy(l => prOwnersMap[l.PullRequest]).
             Select(l => new
             {
-                Lead = l.Key,
-                Items = l.OrderBy(ll => ll.Item2).ToList()
+                AreaLead = l.Key,
+                PullRequests = l.OrderBy(ll => ll.LastCommitDate).ToList()
             }).
-            OrderByDescending(id => id.Items.Count()).
-            ThenBy(id => id.Items.First().Item2);
+            OrderByDescending(id => id.PullRequests.Count()).
+            ThenBy(id => id.PullRequests.First().LastCommitDate);
 
         foreach (var group in grouping)
         {
-            sw.WriteLine($"<p>{WebUtility.HtmlEncode(group.Lead)}</p>");
+            sw.WriteLine($"<p>{WebUtility.HtmlEncode(group.AreaLead)}</p>");
 
             sw.WriteLine("<table>");
             sw.WriteLine("<thead><tr><th>Pull Request</th><th>Assignee</th><th>Area</th><th>Stale Days</th></thead>");
             sw.WriteLine("<tbody>");
 
-            foreach (var item in group.Items)
+            foreach (var item in group.PullRequests)
             {
-                await AppendPRInfo(sw, pr_area, item.Item1, item.Item2);
+                await AppendPRInfo(sw, prAreasMap, item.PullRequest, item.LastCommitDate);
             }
 
             sw.WriteLine("</tbody>");

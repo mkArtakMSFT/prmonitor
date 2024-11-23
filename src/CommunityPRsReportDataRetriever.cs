@@ -5,6 +5,8 @@ using System.Linq;
 using System.Threading.Tasks;
 
 namespace prmonitor;
+public record PullRequestAndLastCommitDate(PullRequest PullRequest, DateTimeOffset LastCommitDate);
+
 
 internal class CommunityPRsReportDataRetriever : GitHubDataRetrieverBase
 {
@@ -17,7 +19,7 @@ internal class CommunityPRsReportDataRetriever : GitHubDataRetrieverBase
         _communityContributionLabel = communityContributionLabel;
     }
 
-    public async Task<List<(PullRequest, DateTimeOffset)>> GetInactiveCommunityPRs()
+    public async Task<List<PullRequestAndLastCommitDate>> GetInactiveCommunityPRs()
     {
         var openPRsRequest = new PullRequestRequest()
         {
@@ -26,7 +28,7 @@ internal class CommunityPRsReportDataRetriever : GitHubDataRetrieverBase
         };
 
         var openPRs = await Client.PullRequest.GetAllForRepository(Org, Repo, openPRsRequest);
-        var inactivePrsList = new List<(PullRequest, DateTimeOffset)>();
+        var inactivePrsList = new List<PullRequestAndLastCommitDate>();
         DateTimeOffset cutDate = DateTimeOffset.Now.AddDays(-_cutoffDaysForInactiveCommunityPRs);
 
         foreach (PullRequest pr in openPRs)
@@ -47,14 +49,14 @@ internal class CommunityPRsReportDataRetriever : GitHubDataRetrieverBase
                 continue;
 
             var prCommits = await Client.PullRequest.Commits(Org, Repo, pr.Number);
-            var lastCommitDate = prCommits.Last().Commit.Author.Date;
+            var lastCommitDate = prCommits.Last().Commit.Committer.Date;
             if (lastCommitDate > cutDate)
             {
                 // There was a recent commit on this PR, so not flagging as `stale
                 continue;
             }
 
-            inactivePrsList.Add((pr, lastCommitDate));
+            inactivePrsList.Add(new PullRequestAndLastCommitDate(pr, lastCommitDate));
         }
 
         return inactivePrsList;
