@@ -74,7 +74,7 @@ partial class Program
 
     private static async Task<string> GetInactiveCommunityPRsReport(CommunityPRsReportDataRetriever reportDataRetriever, CommunityPRsReportGenearator reportGenerator)
     {
-        List<(PullRequest, DateTimeOffset)> pullRequests = await reportDataRetriever.GetInactiveCommunityPRs();
+        var pullRequests = await reportDataRetriever.GetInactiveCommunityPRs();
 
         return await reportGenerator.GenerateInactiveCommunityPRsReportInternal(pullRequests);
     }
