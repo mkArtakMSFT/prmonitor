@@ -1,7 +1,5 @@
 # PR Monitor
-
-This project started as a clone of the code in https://github.com/marek-safar/prmonitor repo.
-Some features didn't make sense to have , so those have been removed, as well as few other convenience things have been added.
+PRMonitor is a utility for generating a report based on community-submitted PRs to the dotnet/aspnetcore repo.
 
 ## Report
 The report is generated as an `.html` file and includes the following information:
